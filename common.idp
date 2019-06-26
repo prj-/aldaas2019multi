@@ -1,0 +1,91 @@
+/*
+   Author(s): Pierre Jolivet <pierre.jolivet@enseeiht.fr>
+        Date: 2019-02-18
+
+   Copyright (C) 2019-     Centre National de la Recherche Scientifique
+
+   This script is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+   If you use this script, you are kindly asked to cite the following article:
+
+   "A Multilevel Schwarz Preconditioner Based on a Hierarchy of Robust Coarse Spaces",
+   H. Al Daas, L. Grigori, P. Jolivet, and P.-H. Tournier (2019).
+ */
+
+Wh<real> def(u); // local solution
+IFMACRO(!petsc)
+Neumann = Loc;
+schwarz A(Loc, intersection, D);
+statistics(A);
+
+set(A, sparams = "-hpddm_verbosity " + (mpirank ? 0 : 3) + " -hpddm_level_2_verbosity " + (mpirank ? 0 : 1) + " -hpddm_level_3_verbosity 0 " + " -hpddm_schwarz_method ras -hpddm_compute_residual l2 -hpddm_variant flexible -hpddm_schwarz_coarse_correction deflated " + " -hpddm_orthogonalization mgs -hpddm_max_it 80 -hpddm_gmres_restart 80 -hpddm_geneo_nu 40");
+
+real[int] timing(1);
+timing(0) = Wh.ndof;
+
+int base = getARGV("-base", 2);
+bool firstSolve = true;
+for(int j = 0; j < 2; ++j) {
+    if(j == 1)
+        set(A, sparams = "-hpddm_level_2_aggregate_size 1 -hpddm_level_2_variant right -hpddm_level_2_orthogonalization mgs  -hpddm_level_2_schwarz_method ras " + " -hpddm_level_2_schwarz_coarse_correction deflated " + " -hpddm_level_2_max_it 50 -hpddm_level_2_gmres_restart 50  -hpddm_level_2_geneo_nu 20");
+    for(int i = 0; i < 4 && (base^(i + 1) <= mpisize / 2.0 || i == 0); ++i) {
+        set(A, sparams = "-hpddm_level_2_p " + base^(i + 1));
+        if(mpisize > 1 && isSetOption("schwarz_coarse_correction")) {
+            if(firstSolve)
+                attachCoarseOperator(mpiCommWorld, A, A = Neumann, timing = timing);
+            else {
+                Wh[int] def(dummy)(0);
+                attachCoarseOperator(mpiCommWorld, A, A = Neumann, timing = timing, deflation = dummy);
+            }
+        }
+        set(A, sparams = (firstSolve ? "-hpddm_reuse_preconditioner" : ""));
+        u[] = 0;
+        DDM(A, u[], rhs, timing = timing);
+        if(firstSolve)
+            firstSolve = false;
+    }
+}
+if(usedARGV("-no_timing") == -1) {
+    real[int, int] gather(timing.n, mpisize);
+    mpiGather(timing, gather, processor(0));
+    if(mpirank == 0) {
+        string ss = "timing/" + prefix + "_" + clock() + "_" + mpisize + ".txt";
+        ofstream file(ss);
+        file.scientific;
+        int nSolve = (gather.n - 2) / 3;
+        file << "CS #1:\t\t" << gather(2, 0) << endl;
+        file << "Solve #1:\t" << gather(4, 0) << endl;
+        for(int i = 1; i < nSolve; ++i) {
+            file << "CS #" << i + 1 << ":\t\t" << gather(5 + 3 * (i - 1), 0) << endl;
+            file << "Solve #" << i + 1 << ":\t" << gather(5 + 3 * (i - 1) + 2, 0) << endl;
+        }
+        file << "d.o.f.\tdeflation\t\tfactorization" << endl;
+        for(int i = 0; i < mpisize; ++i)
+            file << int(gather(0, i)) << "\t" << gather(1, i) << "\t" << gather(3, i) << endl;
+        cout << "Timings wrote in " << ss << endl;
+    }
+}
+ENDIFMACRO
+IFMACRO(petsc)
+Mat A(Loc, intersection, D, bs = (Rb.n == 6 ? 3 : (Rb.n == 3 ? 2 : 1)));
+string common = "-ksp_pc_side right -ksp_rtol 1e-6 -ksp_monitor -ksp_view -ksp_view_final_residual ";
+if(Rb.n > 0)
+    set(A, sparams = common + "-pc_type gamg -pc_gamg_sym_graph true -mg_coarse_pc_type redundant -mg_coarse_redundant_pc_type cholesky -mg_levels_ksp_type chebyshev " + " -mg_levels_pc_asm_overlap 0 -mg_levels_sub_pc_type cholesky -pc_gamg_asm_use_agg true -pc_gamg_repartition true -pc_gamg_square_graph 4 -pc_gamg_threshold 0.03", nearnullspace = Rb);
+else
+    set(A, sparams = common + "-pc_type hypre -pc_hypre_boomeramg_interp_type ext+i -pc_hypre_boomeramg_coarsen_type hmis");
+u[] = A^-1 * rhs;
+ENDIFMACRO
+if(usedARGV("-output") != -1) {
+    Wh def(z);
+    z[] = D;
+    meshN ThExport = trunc(Th, z > 0.4);
+    fespace WhExport(ThExport, Pk);
+    WhExport def(uExport);
+    def(uExport) = def(u);
+    int[int] order = [1];
+    macro sol()def(uExport)// EOM
+    macro orderAndName()order, dataname = "u"// EOM
+    export("output/" + prefix, ThExport, sol, orderAndName, mpiCommWorld);
+}

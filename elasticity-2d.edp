@@ -1,0 +1,68 @@
+/*
+   Author(s): Pierre Jolivet <pierre.jolivet@enseeiht.fr>
+        Date: 2019-02-18
+
+   Copyright (C) 2019-     Centre National de la Recherche Scientifique
+
+   This script is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+   If you use this script, you are kindly asked to cite the following article:
+
+   "A Multilevel Schwarz Preconditioner Based on a Hierarchy of Robust Coarse Spaces",
+   H. Al Daas, L. Grigori, P. Jolivet, and P.-H. Tournier (2019).
+ */
+
+IFMACRO(petsc)
+load "PETSc"
+bool withPETSc = true;
+ENDIFMACRO
+IFMACRO(!petsc)
+load "hpddm"
+bool withPETSc = false;
+ENDIFMACRO
+
+macro dimension()2// EOM
+macro def(i)[i, i#B]// EOM
+macro init(i)[i, i]// EOM
+include "coefficients.idp"
+load "Element_P3"
+macro vectorialfe()P3// EOM
+func Pk = [vectorialfe, vectorialfe];
+int[int] LL = [2, 3, 2, 1];
+include "macro_ddm.idp"
+
+meshN Th = square(6 * getARGV("-global", 5), getARGV("-global", 5), [6 * x, y], label = LL);
+fespace Wh(Th, Pk);               // local finite element space
+int[int][int] intersection;       // local-to-neighbors renumbering
+real[int] D;                      // partition of unity
+{
+    int s = getARGV("-split", 1); // refinement factor
+    build(Th, s, intersection, D, Pk, mpiCommWorld, 2)
+}
+
+real[int] rhs(Wh.ndof);           // local right-hand side
+matrix<real> Loc, Neumann;        // local operator
+Wh<real> def(Rb)[0];              // rigid body modes
+{                                 // local weak form
+    fespace Ph(Th, P0);
+    Ph Young = stripes(x, y, 2e11, 1e7);
+    Ph poisson = stripes(x, y, 0.25, 0.45);
+    Ph tmp = 1.0 + poisson;
+    Ph mu = Young  / (2.0 * tmp);
+    Ph lambda = Young * poisson / (tmp * (1.0 - 2.0 * poisson));
+    real f = -9000.0;
+    varf vPb(def(u), def(v)) = intN(Th)(lambda * div(u) * div(v) + 2.0 * mu * (epsilon(u)' * epsilon(v))) + intN(Th)(f * vB) + on(1, u = 0.0, uB = 0.0);
+    Loc = vPb(Wh, Wh, sym = !withPETSc, tgv = -2);
+    rhs = vPb(0, Wh, tgv = -1);
+    if(withPETSc) {
+        Rb.resize(3);
+        [Rb[0], RbB[0]] = [1, 0];
+        [Rb[1], RbB[1]] = [0, 1];
+        [Rb[2], RbB[2]] = [y, -x];
+    }
+}
+
+macro prefix()"elasticity_2d"// EOM
+include "common.idp"

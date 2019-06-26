@@ -1,0 +1,57 @@
+/*
+   Author(s): Pierre Jolivet <pierre.jolivet@enseeiht.fr>
+        Date: 2019-02-18
+
+   Copyright (C) 2019-     Centre National de la Recherche Scientifique
+
+   This script is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+   If you use this script, you are kindly asked to cite the following article:
+
+   "A Multilevel Schwarz Preconditioner Based on a Hierarchy of Robust Coarse Spaces",
+   H. Al Daas, L. Grigori, P. Jolivet, and P.-H. Tournier (2019).
+ */
+
+real Sqrt = sqrt(2.0);
+IFMACRO(dimension,3)
+macro grad(u)[dx(u), dy(u), dz(u)]// EOM
+macro epsilon(u)[dx(u), dy(u#B), dz(u#C), (dz(u#B) + dy(u#C)) / Sqrt, (dz(u) + dx(u#C)) / Sqrt, (dy(u) + dx(u#B)) / Sqrt]// EOM
+macro div(u)(dx(u) + dy(u#B) + dz(u#C))// EOM
+ENDIFMACRO
+IFMACRO(dimension,2)
+macro grad(u)[dx(u), dy(u)]// EOM
+macro epsilon(u)[dx(u), dy(u#B), (dy(u) + dx(u#B)) / Sqrt]// EOM
+macro div(u)(dx(u) + dy(u#B))// EOM
+ENDIFMACRO
+func bool channel(real a, real b, real dx1, real dy1, real dx2, real dy2, real width) {
+    real slope = (dy2 - dy1) / (dx2 - dx1);
+    if(a >= dx1 && a <= dx2) {
+        if(b >= (slope * (x - dx2) + dy2) && b <= (slope * (x - dx2) + dy2 + width))
+            return true;
+    }
+    return false;
+}
+func real skyscraper(real a, real b) {
+    int da = int(9 * a);
+    int db = int(9 * b);
+    real kappa;
+    if((da + 1) % 2 && (db + 1) % 2)
+        kappa = 1e+5 * (da + db + 1);
+    else {
+        if(channel(a, b, 0.1, 0.2, 0.5, 0.6, 0.15))
+            kappa = b * 1e+6;
+        else if(channel(a, b, 0.5, 0.15, 0.9, 0.05, 0.2))
+            kappa = a * 1e+5;
+        else if(channel(a, b, 0.3, 0.6, 0.9, 0.5, 0.2))
+            kappa = (a + b) * 1e+6;
+        else
+            kappa = 1;
+    }
+    return kappa;
+}
+func real stripes(real a, real b, real paramA, real paramB) {
+    int da = int(a * 5);
+    return (da == (int(da / 2) * 2) ?  paramB : paramA);
+}
