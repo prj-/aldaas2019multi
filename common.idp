@@ -42,7 +42,7 @@ for(int j = 0; j < 2; ++j) {
         }
         set(A, sparams = (firstSolve ? "-hpddm_reuse_preconditioner" : ""));
         u[] = 0;
-        DDM(A, u[], rhs, timing = timing);
+        DDM(A, rhs, u[], timing = timing);
         if(firstSolve)
             firstSolve = false;
     }
