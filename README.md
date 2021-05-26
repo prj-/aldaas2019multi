@@ -2,22 +2,25 @@
 
 > A parallel implementation of a multilevel linear solver, part of the HPDDM library and tested in the FreeFEM language.
 
-<p align="center"><img src="https://github.com/prj-/aldaas2019multi/raw/master/header.png" height="300"></p>
+<p align="center"><img src="https://github.com/prj-/aldaas2019multi/raw/main/header.png" height="300"></p>
 
-The code available in this repository can reproduce the results from the following [paper](https://hal.archives-ouvertes.fr/hal-02151184).
+The code available in this repository can reproduce the results from the following [paper](https://epubs.siam.org/doi/abs/10.1137/19M1266964).
 ```
 @article{aldaas2019multi,
     Author = {Al Daas, Hussam and Grigori, Laura and Jolivet, Pierre and Tournier, Pierre-Henri},
-    Title = {{A Multilevel Schwarz Preconditioner Based on a Hierarchy of Robust Coarse Spaces}},
-    Year = {2019},
-    Journal = {submitted for publication},
+    Title = {A Multilevel {Schwarz} Preconditioner Based on a Hierarchy of Robust Coarse Spaces},
+    Year = {2021},
+    Journal = {SIAM Journal on Scientific Computing},
+    Volume = {43},
+    Number = {3},
+    Pages = {A1907--A1928},
     Url = {https://github.com/prj-/aldaas2019multi}
 }
 ```
 
 ## Getting started
 ### Dependencies
-Make sure you have access to a recent [FreeFEM](https://freefem.org/) installation (version 4.3 or above), compiled with the `hpddm` plugin. More details about the HPDDM options used in the solver may be found in the [cheat sheet](https://github.com/hpddm/hpddm/blob/master/doc/cheatsheet.pdf).
+Make sure you have access to a recent [FreeFEM](https://freefem.org/) installation (version 4.3 or above), compiled with the `hpddm` plugin. More details about the HPDDM options used in the solver may be found in the [cheat sheet](https://github.com/hpddm/hpddm/blob/main/doc/cheatsheet.pdf).
 ### Usage example
 One should be able to launch the following commands, which solves the scalar diffusion or linear elasticity equations on the same geometrical configurations as in the paper.
 ```
